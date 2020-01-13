@@ -6,6 +6,7 @@
 /tensorboard/
 
 # Hidden files
+.idea
 .vscode
 .directory
 
