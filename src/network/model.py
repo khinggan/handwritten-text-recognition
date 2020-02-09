@@ -108,7 +108,7 @@ class HTRModel:
             EarlyStopping(
                 monitor=monitor,
                 min_delta=1e-8,
-                patience=20,
+                patience=10,
                 restore_best_weights=True,
                 verbose=verbose),
             ReduceLROnPlateau(
@@ -532,3 +532,110 @@ def _create_octconv_last_block(inputs, ch, alpha):
     x = layers.Activation("relu")(x)
 
     return x
+
+
+def puigcerver_words(input_size, d_model, learning_rate):
+    """
+        Result in word is not good. Training loss is good, but when I predict, WER = 64%
+        Convolucional Recurrent Neural Network by Puigcerver et al.
+
+        Reference:
+            Joan Puigcerver.
+            Are multidimensional recurrent layers really necessary for handwritten text recognition?
+            In: Document Analysis and Recognition (ICDAR), 2017 14th
+            IAPR International Conference on, vol. 1, pp. 67–72. IEEE (2017)
+
+            Carlos Mocholí Calvo and Enrique Vidal Ruiz.
+            Development and experimentation of a deep learning system for convolutional and recurrent neural networks
+            Escola Tècnica Superior d’Enginyeria Informàtica, Universitat Politècnica de València, 2018
+        """
+
+    input_data = Input(name="input", shape=input_size)
+
+    cnn = Conv2D(filters=16, kernel_size=(3, 3), strides=(1, 1), padding="same")(input_data)
+    cnn = BatchNormalization()(cnn)
+    cnn = LeakyReLU(alpha=0.01)(cnn)
+    cnn = MaxPooling2D(pool_size=(2, 2), strides=(2, 2), padding="valid")(cnn)
+
+    cnn = Conv2D(filters=32, kernel_size=(3, 3), strides=(1, 1), padding="same")(cnn)
+    cnn = BatchNormalization()(cnn)
+    cnn = LeakyReLU(alpha=0.01)(cnn)
+    cnn = MaxPooling2D(pool_size=(2, 2), strides=(2, 2), padding="valid")(cnn)
+
+    # cnn = Dropout(rate=0.2)(cnn)
+    # cnn = Conv2D(filters=48, kernel_size=(3, 3), strides=(1, 1), padding="same")(cnn)
+    # cnn = BatchNormalization()(cnn)
+    # cnn = LeakyReLU(alpha=0.01)(cnn)
+    # cnn = MaxPooling2D(pool_size=(2, 2), strides=(2, 2), padding="valid")(cnn)
+
+    cnn = Dropout(rate=0.2)(cnn)
+    cnn = Conv2D(filters=64, kernel_size=(3, 3), strides=(1, 1), padding="same")(cnn)
+    cnn = BatchNormalization()(cnn)
+    cnn = LeakyReLU(alpha=0.01)(cnn)
+
+    cnn = Dropout(rate=0.2)(cnn)
+    cnn = Conv2D(filters=80, kernel_size=(3, 3), strides=(1, 1), padding="same")(cnn)
+    cnn = BatchNormalization()(cnn)
+    cnn = LeakyReLU(alpha=0.01)(cnn)
+
+    shape = cnn.get_shape()
+    blstm = Reshape((shape[1], shape[2] * shape[3]))(cnn)
+
+    blstm = Bidirectional(LSTM(units=256, return_sequences=True, dropout=0.5))(blstm)
+    blstm = Bidirectional(LSTM(units=256, return_sequences=True, dropout=0.5))(blstm)
+    blstm = Bidirectional(LSTM(units=256, return_sequences=True, dropout=0.5))(blstm)
+    blstm = Bidirectional(LSTM(units=256, return_sequences=True, dropout=0.5))(blstm)
+    blstm = Bidirectional(LSTM(units=256, return_sequences=True, dropout=0.5))(blstm)
+
+    blstm = Dropout(rate=0.5)(blstm)
+    output_data = Dense(units=d_model, activation="softmax")(blstm)
+
+    if learning_rate is None:
+        learning_rate = 3e-4
+
+    optimizer = RMSprop(learning_rate=learning_rate)
+
+    return (input_data, output_data, optimizer)
+
+
+def simpleHTR(input_size, d_model, learning_rate):
+    input_data = Input(name='input', shape=input_size)
+
+    # 5 convolution layers, pooling layers,
+    #       kernelVals = [5, 5, 3, 3, 3]
+    # 		featureVals = [1, 32, 64, 128, 128, 256]
+    # 		poolVals = [(2,2), (2,2), (1,2), (1,2), (1,2)]
+    cnn = Conv2D(32, (5, 5), strides=(1, 1), padding='same', activation='relu')(input_data)
+    cnn = BatchNormalization()(cnn)
+    cnn = MaxPooling2D(pool_size=(2, 2), strides=(2, 2), padding='valid')(cnn)
+
+    cnn = Conv2D(64, (5, 5), (1, 1), padding='same', activation='relu')(cnn)
+    cnn = BatchNormalization()(cnn)
+    cnn = MaxPooling2D(pool_size=(2, 2), strides=(2, 2), padding='valid')(cnn)
+
+    cnn = Conv2D(128, (3, 3), strides=(1, 1), padding='same', activation='relu')(cnn)
+    cnn = BatchNormalization()(cnn)
+    cnn = MaxPooling2D(pool_size=(1, 2), strides=(1, 2), padding='valid')(cnn)
+
+    cnn = Conv2D(128, (3, 3), strides=(1, 1), padding='same', activation='relu')(cnn)
+    cnn = BatchNormalization()(cnn)
+    cnn = MaxPooling2D(pool_size=(1, 2), strides=(1, 2), padding='valid')(cnn)
+
+    cnn = Conv2D(256, (3, 3), strides=(1, 1), padding='same', activation='relu')(cnn)
+    cnn = BatchNormalization()(cnn)
+    cnn = MaxPooling2D(pool_size=(1, 2), strides=(1, 2), padding='valid')(cnn)
+
+    shape = cnn.get_shape()
+    blstm = Reshape((shape[1], shape[2] * shape[3]))(cnn)
+    blstm = Bidirectional(LSTM(units=256, return_sequences=True, dropout=0.5))(blstm)
+    blstm = Bidirectional(LSTM(units=256, return_sequences=True, dropout=0.5))(blstm)
+
+    blstm = Dropout(rate=0.5)(blstm)
+    output_data = Dense(units=d_model, activation="softmax")(blstm)
+
+    if learning_rate is None:
+        learning_rate = 3e-4
+
+    optimizer = RMSprop(learning_rate=learning_rate)
+
+    return (input_data, output_data, optimizer)

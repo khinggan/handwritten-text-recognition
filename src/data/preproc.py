@@ -115,6 +115,8 @@ def preproc(img, input_size):
 
         img = np.asarray(img[boundbox[0]:boundbox[1], boundbox[2]:boundbox[3]], dtype=np.uint8)
 
+    if img is None:
+        return None
     wt, ht, _ = input_size
     h, w = np.asarray(img).shape
     f = max((w / wt), (h / ht))
@@ -124,10 +126,10 @@ def preproc(img, input_size):
 
     _, binary = cv2.threshold(img, 254, 255, cv2.THRESH_BINARY)
 
-    if np.sum(img) * 0.8 > np.sum(binary):
-        img = illumination_compensation(img)
-
-    img = remove_cursive_style(img)
+    # if np.sum(img) * 0.8 > np.sum(binary):
+    #     img = illumination_compensation(img)
+    #
+    # img = remove_cursive_style(img)
 
     target = np.ones([ht, wt], dtype=np.uint8) * 255
     target[0:new_size[1], 0:new_size[0]] = img

@@ -18,6 +18,7 @@ import h5py
 import os
 import string
 import datetime
+import numpy as np
 
 from data import preproc as pp, evaluation
 from data.generator import DataGenerator, Tokenizer
@@ -29,7 +30,7 @@ from network.model import HTRModel
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--source", type=str, required=True)
-    parser.add_argument("--arch", type=str, default="flor")
+    parser.add_argument("--arch", type=str, default="puigcerver_words")
 
     parser.add_argument("--transform", action="store_true", default=False)
     parser.add_argument("--cv2", action="store_true", default=False)
@@ -48,9 +49,11 @@ if __name__ == "__main__":
     output_path = os.path.join("..", "output", args.source, args.arch)
     target_path = os.path.join(output_path, "checkpoint_weights.hdf5")
 
-    input_size = (1024, 128, 1)
-    max_text_length = 128
-    charset_base = string.printable[:95]
+    # input_size = (1024, 128, 1)
+    # max_text_length = 128
+    input_size = (128, 32, 1)
+    max_text_length = 32
+    charset_base = string.printable[:79]
 
     if args.transform:
         assert os.path.exists(raw_path)
@@ -65,11 +68,39 @@ if __name__ == "__main__":
         print("Partitions will be saved...")
         os.makedirs(os.path.dirname(source_path), exist_ok=True)
 
-        for i in ds.partitions:
-            with h5py.File(source_path, "a") as hf:
-                hf.create_dataset(f"{i}/dt", data=ds.dataset[i]['dt'], compression="gzip", compression_opts=9)
-                hf.create_dataset(f"{i}/gt", data=ds.dataset[i]['gt'], compression="gzip", compression_opts=9)
-                print(f"[OK] {i} partition.")
+        # for i in ds.partitions:
+        #     with h5py.File(source_path, "a") as hf:
+        #         hf.create_dataset(f"{i}/dt", data=ds.dataset[i]['dt'], compression="gzip", compression_opts=9)
+        #         hf.create_dataset(f"{i}/gt", data=ds.dataset[i]['gt'], compression="gzip", compression_opts=9)
+        #         print(f"[OK] {i} partition.")
+
+        # hdf5 变量;
+        # train/dt, train/gt,     valid/dt, valid/gt,      test/dt, test/gt
+
+        for partition in ds.partitions:
+            for i, item in enumerate(ds.dataset[partition]['dt']):
+                if item is None:
+                    ds.dataset[partition]['dt'].pop(i)
+                    ds.dataset[partition]['gt'].pop(i)
+                    print(i, ds.dataset[partition]['gt'][i])
+
+        hdf5_file = h5py.File(source_path, 'a')
+        hdf5_file.create_dataset('train/dt', (len(ds.dataset['train']['dt']), 128, 32), np.int)
+        hdf5_file.create_dataset('test/dt', (len(ds.dataset['test']['dt']), 128, 32), np.int)
+        hdf5_file.create_dataset('valid/dt', (len(ds.dataset['valid']['dt']), 128, 32), np.int)
+
+        string_type = h5py.special_dtype(vlen=str)
+        hdf5_file.create_dataset('train/gt', (len(ds.dataset['train']['gt']), ), dtype=string_type)
+        hdf5_file.create_dataset('test/gt', (len(ds.dataset['test']['gt']), ), dtype=string_type)
+        hdf5_file.create_dataset('valid/gt', (len(ds.dataset['valid']['gt']), ), dtype=string_type)
+
+        hdf5_file['train/dt'][...] = ds.dataset['train']['dt']
+        hdf5_file['test/dt'][...] = ds.dataset['test']['dt']
+        hdf5_file['valid/dt'][...] = ds.dataset['valid']['dt']
+
+        hdf5_file['train/gt'][...] = ds.dataset['train']['gt']
+        hdf5_file['test/gt'][...] = ds.dataset['test']['gt']
+        hdf5_file['valid/gt'][...] = ds.dataset['valid']['gt']
 
         print(f"Transformation finished.")
 
@@ -133,7 +164,8 @@ if __name__ == "__main__":
 
         model = HTRModel(architecture=args.arch,
                          input_size=input_size,
-                         vocab_size=dtgen.tokenizer.vocab_size)
+                         vocab_size=dtgen.tokenizer.vocab_size,
+                         greedy=True)
 
         # set `learning_rate` parameter or get architecture default value
         model.compile(learning_rate=0.001)
@@ -185,18 +217,18 @@ if __name__ == "__main__":
         elif args.test:
             start_time = datetime.datetime.now()
 
-            predicts, _ = model.predict(x=dtgen.next_test_batch(),
-                                        steps=dtgen.steps['test'],
-                                        ctc_decode=True,
-                                        verbose=1)
+            predicts, confidences = model.predict(x=dtgen.next_test_batch(),
+                                                 steps=dtgen.steps['test'],
+                                                 ctc_decode=True,
+                                                 verbose=1)
 
             predicts = [dtgen.tokenizer.decode(x[0]) for x in predicts]
 
             total_time = datetime.datetime.now() - start_time
 
             with open(os.path.join(output_path, "predict.txt"), "w") as lg:
-                for pd, gt in zip(predicts, dtgen.dataset['test']['gt']):
-                    lg.write(f"TE_L {gt}\nTE_P {pd}\n")
+                for pd, gt, conf in zip(predicts, dtgen.dataset['test']['gt'], confidences):
+                    lg.write(f"TE_L {gt}\nTE_P {pd}\nCONF {conf}\n")
 
             evaluate = evaluation.ocr_metrics(predicts=predicts,
                                               ground_truth=dtgen.dataset['test']['gt'],

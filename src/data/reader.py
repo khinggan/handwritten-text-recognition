@@ -39,8 +39,10 @@ class Dataset():
                     self.dataset[y]['dt'].pop(i)
                     continue
 
-                self.dataset[y]['gt'][i] = text.encode()
+                # self.dataset[y]['gt'][i] = text.encode()
+                self.dataset[y]['gt'][i] = text
 
+                # self.dataset[y]['dt'][i] = pp.preproc(self.dataset[y]['dt'][i], input_size)
             pool = Pool()
             self.dataset[y]['dt'] = pool.map(partial(pp.preproc, input_size=input_size), self.dataset[y]['dt'])
             pool.close()
@@ -115,6 +117,94 @@ class Dataset():
                 except KeyError:
                     pass
 
+        return dataset
+
+    def _iam_words_aachen(self):
+        """IAM words reader"""
+        pt_path = os.path.join(self.source, "Aachen_split")
+        paths = {"train": open(os.path.join(pt_path, "train.uttlist")).read().splitlines(),
+                 "valid": open(os.path.join(pt_path, "validation.uttlist")).read().splitlines(),
+                 "test": open(os.path.join(pt_path, "test.uttlist")).read().splitlines()}
+        words_lines = open(os.path.join(self.source, "words.txt")).read().splitlines()
+
+        gt_dict = dict()
+
+        for words_line in words_lines:
+            if (not words_line or words_line[0] == "#"):
+                continue
+
+            splitted = words_line.split()
+
+            if splitted[1] == "ok":
+                gt_dict[splitted[0]] = " ".join(splitted[8::])
+
+        dataset = dict()
+
+        for i in self.partitions:
+            dataset[i] = {"dt": [], "gt": []}
+
+            for line in paths[i]:
+                try:
+                    split = line.split("-")
+                    folder1 = f"{split[0]}"               # words parent folder
+                    folder2 = f"{split[0]}-{split[1]}"    # words folder and split name
+
+                    img_path = os.path.join(self.source, "words", folder1, folder2)
+
+                    for img_file in glob("{}/*.png".format(img_path)):
+                        dataset[i]['gt'].append(gt_dict[str(os.path.basename(img_file).split(".")[0])])
+                        dataset[i]['dt'].append(img_file)
+                except KeyError:
+                    pass
+        return dataset
+
+    def _iam_words(self):
+        """load data 95: 5"""
+        words_lines = open(os.path.join(self.source, "words.txt")).read().splitlines()
+
+        path_list = list()
+
+        gt_dict = dict()
+        path_dict = dict()
+
+        for words_line in words_lines:
+            if (not words_line or words_line[0] == "#"):
+                continue
+
+            splitted = words_line.split()
+
+            if splitted[1] == "ok":
+                gt_dict[splitted[0]] = " ".join(splitted[8::])
+                path_dict[splitted[0]] = self.source + 'words/' + splitted[0].split('-')[0] + '/' + splitted[0].split('-')[0] + '-' +\
+                                         splitted[0].split('-')[1] + '/' + splitted[0] + '.png'
+                path_list.append(splitted[0])
+
+        dataset = dict()
+        # train: 95%, valid=test: 5%;
+
+        for i in self.partitions:
+            dataset[i] = {"dt": [], "gt": []}
+
+            split_path_list = []
+            if i == "train":
+                split_path_list = path_list[: int(len(path_list) * 0.95)]
+            else:
+                split_path_list = path_list[int(len(path_list) * 0.95):]
+
+            for path in split_path_list:
+                try:
+                    split = path.split("-")
+                    folder1 = f"{split[0]}"  # words parent folder
+                    folder2 = f"{split[0]}-{split[1]}"  # words folder and split name
+
+                    name = f"{split[0]}-{split[1]}-{split[2]}-{split[3]}"
+
+                    img_path = os.path.join(self.source, "words", folder1, folder2, name + '.png')
+
+                    dataset[i]['gt'].append(gt_dict[name])
+                    dataset[i]['dt'].append(img_path)
+                except KeyError:
+                    pass
         return dataset
 
     def _rimes(self):

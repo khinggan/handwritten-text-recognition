@@ -22,6 +22,15 @@ d. [Saint Gall](http://www.fki.inf.unibe.ch/databases/iam-historical-document-da
 
 e. [Washington](http://www.fki.inf.unibe.ch/databases/iam-historical-document-database/washington-database)
 
+## Just for IAM word images
+Download words images
+> words_url =  http://www.fki.inf.unibe.ch/DBs/iamDB/data/words/words.tgz
+>
+> wget -P $download_dir --user "$username" --password "$password" $words_url
+
+Download Aachen split
+> Download split form https://www.openslr.org/56/, and extract in `raw/iam/aachen_split`
+
 ## Requirements
 
 * Python 3.x

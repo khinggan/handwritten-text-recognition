@@ -32,7 +32,8 @@ class DataGenerator():
 
         for pt in self.partitions:
             # decode sentences from byte
-            self.dataset[pt]['gt'] = [x.decode() for x in self.dataset[pt]['gt']]
+            # self.dataset[pt]['gt'] = [x.decode() for x in self.dataset[pt]['gt']]
+            self.dataset[pt]['gt'] = [x for x in self.dataset[pt]['gt']]
 
             # set size and setps
             self.size[pt] = len(self.dataset[pt]['gt'])
