@@ -6,6 +6,8 @@ Tool to metrics calculation through data and label (string and string).
 import string
 import unicodedata
 import editdistance
+import matplotlib.pyplot as plt
+import sklearn.metrics as metrics
 
 
 def ocr_metrics(predicts, ground_truth, norm_accentuation=False, norm_punctuation=False):
@@ -43,3 +45,20 @@ def ocr_metrics(predicts, ground_truth, norm_accentuation=False, norm_punctuatio
     ser_f = sum(ser) / len(ser)
 
     return (cer_f, wer_f, ser_f)
+
+
+import numpy as np
+
+
+def draw_roc(y_test, result):
+    fpr, tpr, threshold = metrics.roc_curve(y_test, result)
+    roc_auc = metrics.auc(fpr, tpr)
+    plt.figure()
+    plt.plot(tpr, fpr, color='darkorange', label='ROC curve (area = %0.2f)' % roc_auc)
+    plt.plot([0, 1], [0, 1], color='navy', linestyle='--')
+    plt.xlim([0.0, 1.0])
+    plt.ylim([0.0, 1.0])
+    plt.xlabel('frr')
+    plt.ylabel('far')
+    plt.legend(loc='lower right')
+    plt.show()

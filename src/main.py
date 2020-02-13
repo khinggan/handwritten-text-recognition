@@ -244,6 +244,9 @@ if __name__ == "__main__":
                 f"Word Error Rate:      {evaluate[1]:.8f}",
                 f"Sequence Error Rate:  {evaluate[2]:.8f}"
             ])
+            # draw ROC and calculate AUC
+            y_test = [0 if pd == gt else 1 for pd, gt in zip(predicts, dtgen.dataset['test']['gt'])]
+            evaluation.draw_roc(y_test, confidences)
 
             with open(os.path.join(output_path, "evaluate.txt"), "w") as lg:
                 lg.write(e_corpus)
