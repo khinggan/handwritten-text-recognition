@@ -52,13 +52,13 @@ import numpy as np
 
 def draw_roc(y_test, result):
     fpr, tpr, threshold = metrics.roc_curve(y_test, result)
-    roc_auc = metrics.auc(fpr, tpr)
+    roc_auc = metrics.auc(tpr, fpr)
     plt.figure()
     plt.plot(tpr, fpr, color='darkorange', label='ROC curve (area = %0.2f)' % roc_auc)
     plt.plot([0, 1], [0, 1], color='navy', linestyle='--')
     plt.xlim([0.0, 1.0])
     plt.ylim([0.0, 1.0])
-    plt.xlabel('frr')
-    plt.ylabel('far')
+    plt.xlabel('misread rate (fpr)')
+    plt.ylabel('read rate (tpr)')
     plt.legend(loc='lower right')
     plt.show()

@@ -218,12 +218,12 @@ if __name__ == "__main__":
             start_time = datetime.datetime.now()
 
             predicts, confidences = model.predict(x=dtgen.next_test_batch(),
-                                                 steps=dtgen.steps['test'],
-                                                 ctc_decode=True,
-                                                 verbose=1)
+                                                  steps=dtgen.steps['test'],
+                                                  ctc_decode=True,
+                                                  verbose=1)
 
             predicts = [dtgen.tokenizer.decode(x[0]) for x in predicts]
-
+            confidences = [(1 - x[1] / x[0]) for x in confidences]
             total_time = datetime.datetime.now() - start_time
 
             with open(os.path.join(output_path, "predict.txt"), "w") as lg:

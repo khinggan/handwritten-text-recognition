@@ -225,11 +225,16 @@ class HTRModel:
             x_test = np.asarray(out[index:until])
             x_test_len = np.asarray([input_length for _ in range(len(x_test))])
 
+            # decode, log = K.ctc_decode(x_test,
+            #                            x_test_len,
+            #                            greedy=self.greedy,
+            #                            beam_width=self.beam_width,
+            #                            top_paths=self.top_paths)
             decode, log = K.ctc_decode(x_test,
                                        x_test_len,
-                                       greedy=self.greedy,
-                                       beam_width=self.beam_width,
-                                       top_paths=self.top_paths)
+                                       greedy=False,
+                                       beam_width=10,
+                                       top_paths=2)
 
             probabilities.extend([np.exp(x) for x in log])
             decode = [[[int(p) for p in x if p != -1] for x in y] for y in decode]
