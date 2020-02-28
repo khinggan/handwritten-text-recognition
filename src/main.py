@@ -223,11 +223,23 @@ if __name__ == "__main__":
                                                   verbose=1)
 
             predicts = [dtgen.tokenizer.decode(x[0]) for x in predicts]
-            confidences = [(1 - x[1] / x[0]) for x in confidences]
+            # 3 种 confidence 计算方法
+            new_predicts = []
+            new_confidences = []
+            new_gt = []
+            for i, confidence in enumerate(confidences):
+                if confidence[0] != 0 and (confidence[1] != -np.float('inf') or confidence[1] != -np.float('inf')):
+                    new_confidences.append(1 - confidence[1] / confidence[0])
+                    new_predicts.append(predicts[i])
+                    new_gt.append(dtgen.dataset['test']['gt'][i])
+
+            # confidences = [(x[0] - x[1]) / (x[1] + x[0]) for x in confidences]
+            # confidences = [x[0] for x in confidences]
             total_time = datetime.datetime.now() - start_time
 
             with open(os.path.join(output_path, "predict.txt"), "w") as lg:
-                for pd, gt, conf in zip(predicts, dtgen.dataset['test']['gt'], confidences):
+                # for pd, gt, conf in zip(predicts, dtgen.dataset['test']['gt'], confidences):
+                for pd, gt, conf in zip(predicts, dtgen.dataset['test']['gt'], new_confidences):
                     lg.write(f"TE_L {gt}\nTE_P {pd}\nCONF {conf}\n")
 
             evaluate = evaluation.ocr_metrics(predicts=predicts,
@@ -245,8 +257,10 @@ if __name__ == "__main__":
                 f"Sequence Error Rate:  {evaluate[2]:.8f}"
             ])
             # draw ROC and calculate AUC
-            y_test = [0 if pd == gt else 1 for pd, gt in zip(predicts, dtgen.dataset['test']['gt'])]
-            evaluation.draw_roc(y_test, confidences)
+            # y_test = [0 if pd == gt else 1 for pd, gt in zip(predicts, dtgen.dataset['test']['gt'])]
+            y_test = [0 if pd == gt else 1 for pd, gt in zip(new_predicts, new_gt)]
+            # evaluation.draw_roc(y_test, confidences)
+            evaluation.draw_roc(y_test, new_confidences)
 
             with open(os.path.join(output_path, "evaluate.txt"), "w") as lg:
                 lg.write(e_corpus)

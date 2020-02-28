@@ -19,6 +19,7 @@ from network.layers import FullGatedConv2D, GatedConv2D, OctConv2D
 from tensorflow.keras.layers import Conv2D, Bidirectional, LSTM, GRU, Dense
 from tensorflow.keras.layers import Dropout, BatchNormalization, LeakyReLU, PReLU
 from tensorflow.keras.layers import Input, MaxPooling2D, Reshape
+from network.ctc_decode import prefix_beam_decode, remove_blank
 
 
 """
@@ -224,21 +225,41 @@ class HTRModel:
 
             x_test = np.asarray(out[index:until])
             x_test_len = np.asarray([input_length for _ in range(len(x_test))])
-
+            # 1. greedy decode
             # decode, log = K.ctc_decode(x_test,
             #                            x_test_len,
             #                            greedy=self.greedy,
             #                            beam_width=self.beam_width,
             #                            top_paths=self.top_paths)
-            decode, log = K.ctc_decode(x_test,
-                                       x_test_len,
-                                       greedy=False,
-                                       beam_width=10,
-                                       top_paths=2)
+            # probabilities.extend([np.exp(x) for x in log])
+            # decode = [[[int(p) for p in x if p != -1] for x in y] for y in decode]
+            # predicts.extend(np.swapaxes(decode, 0, 1))
 
-            probabilities.extend([np.exp(x) for x in log])
-            decode = [[[int(p) for p in x if p != -1] for x in y] for y in decode]
-            predicts.extend(np.swapaxes(decode, 0, 1))
+            # 2. beam search decode
+            # decode, log = K.ctc_decode(x_test,
+            #                            x_test_len,
+            #                            greedy=False,
+            #                            beam_width=10,
+            #                            top_paths=2)
+            # probabilities.extend([np.exp(x) for x in log])
+            # decode = [[[int(p) for p in x if p != -1] for x in y] for y in decode]
+            # predicts.extend(np.swapaxes(decode, 0, 1))
+
+            # 3. prefix beam search
+            top_paths = 2
+            for one_test in x_test:
+                beam = prefix_beam_decode(one_test, beam_size=10)
+                beam = beam[: top_paths]
+                probability = []
+                predict = []
+                for item in beam:
+                    if item[0][-1] == 81:
+                        probability.append(np.exp(item[1][0]))
+                    else:
+                        probability.append(np.exp(item[1][1]))
+                    predict.append(remove_blank(item[0]))
+                probabilities.append(probability)
+                predicts.append(predict)
 
             steps_done += 1
             if verbose == 1:

@@ -54,7 +54,7 @@ def draw_roc(y_test, result):
     fpr, tpr, threshold = metrics.roc_curve(y_test, result)
     roc_auc = metrics.auc(tpr, fpr)
     plt.figure()
-    plt.plot(tpr, fpr, color='darkorange', label='ROC curve (area = %0.2f)' % roc_auc)
+    plt.plot(tpr, fpr, color='darkorange', label='ROC curve (area = %0.6f)' % roc_auc)
     plt.plot([0, 1], [0, 1], color='navy', linestyle='--')
     plt.xlim([0.0, 1.0])
     plt.ylim([0.0, 1.0])
