@@ -124,8 +124,8 @@ def preproc(img, input_size):
     new_size = (max(min(wt, int(w / f)), 1), max(min(ht, int(h / f)), 1))
     img = cv2.resize(img, new_size)
 
-    _, binary = cv2.threshold(img, 254, 255, cv2.THRESH_BINARY)
-
+    # _, binary = cv2.threshold(img, 254, 255, cv2.THRESH_BINARY)
+    #
     # if np.sum(img) * 0.8 > np.sum(binary):
     #     img = illumination_compensation(img)
     #
@@ -135,6 +135,18 @@ def preproc(img, input_size):
     target[0:new_size[1], 0:new_size[0]] = img
     img = cv2.transpose(target)
 
+
+    # ######################################new preprocess;##########################
+    # img = cv2.imread(img, cv2.IMREAD_GRAYSCALE)
+    # if img is None:
+    #     return
+    # tw, th, c = input_size
+    # img = cv2.resize(img, (tw, th))
+    #
+    # img = cv2.transpose(img)
+    # # plt.imshow(img)
+    # # plt.show()
+    # return img
     return img
 
 

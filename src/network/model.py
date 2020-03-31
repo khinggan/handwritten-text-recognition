@@ -45,7 +45,7 @@ class HTRModel:
                  vocab_size,
                  greedy=False,
                  beam_width=10,
-                 top_paths=1):
+                 top_paths=2):
         """
         Initialization of a HTR Model.
 
@@ -199,6 +199,7 @@ class HTRModel:
 
         self.model._make_predict_function()
 
+
         if verbose == 1:
             print("Model Predict")
 
@@ -225,41 +226,42 @@ class HTRModel:
 
             x_test = np.asarray(out[index:until])
             x_test_len = np.asarray([input_length for _ in range(len(x_test))])
-            # 1. greedy decode
-            # decode, log = K.ctc_decode(x_test,
-            #                            x_test_len,
-            #                            greedy=self.greedy,
-            #                            beam_width=self.beam_width,
-            #                            top_paths=self.top_paths)
-            # probabilities.extend([np.exp(x) for x in log])
-            # decode = [[[int(p) for p in x if p != -1] for x in y] for y in decode]
-            # predicts.extend(np.swapaxes(decode, 0, 1))
+            if self.greedy:
+                # 1. greedy decode
+                decode, log = K.ctc_decode(x_test,
+                                           x_test_len,
+                                           greedy=self.greedy,
+                                           beam_width=self.beam_width,
+                                           top_paths=self.top_paths)
+                probabilities.extend([np.exp(x) for x in log])
+                decode = [[[int(p) for p in x if p != -1] for x in y] for y in decode]
+                predicts.extend(np.swapaxes(decode, 0, 1))
+            else:
+                # 2. beam search decode
+                # decode, log = K.ctc_decode(x_test,
+                #                            x_test_len,
+                #                            greedy=False,
+                #                            beam_width=10,
+                #                            top_paths=2)
+                # probabilities.extend([np.exp(x) for x in log])
+                # decode = [[[int(p) for p in x if p != -1] for x in y] for y in decode]
+                # predicts.extend(np.swapaxes(decode, 0, 1))
 
-            # 2. beam search decode
-            # decode, log = K.ctc_decode(x_test,
-            #                            x_test_len,
-            #                            greedy=False,
-            #                            beam_width=10,
-            #                            top_paths=2)
-            # probabilities.extend([np.exp(x) for x in log])
-            # decode = [[[int(p) for p in x if p != -1] for x in y] for y in decode]
-            # predicts.extend(np.swapaxes(decode, 0, 1))
-
-            # 3. prefix beam search
-            top_paths = 2
-            for one_test in x_test:
-                beam = prefix_beam_decode(one_test, beam_size=10)
-                beam = beam[: top_paths]
-                probability = []
-                predict = []
-                for item in beam:
-                    if item[0][-1] == 81:
-                        probability.append(np.exp(item[1][0]))
-                    else:
-                        probability.append(np.exp(item[1][1]))
-                    predict.append(remove_blank(item[0]))
-                probabilities.append(probability)
-                predicts.append(predict)
+                # 3. prefix beam search
+                top_paths = 2
+                for one_test in x_test:
+                    beam = prefix_beam_decode(one_test, beam_size=10)
+                    beam = beam[: top_paths]
+                    probability = []
+                    predict = []
+                    for item in beam:
+                        if item[0][-1] == 81:
+                            probability.append(np.exp(item[1][0]))
+                        else:
+                            probability.append(np.exp(item[1][1]))
+                        predict.append(remove_blank(item[0]))
+                    probabilities.append(probability)
+                    predicts.append(predict)
 
             steps_done += 1
             if verbose == 1:
@@ -561,38 +563,23 @@ def _create_octconv_last_block(inputs, ch, alpha):
 
 
 def puigcerver_words(input_size, d_model, learning_rate):
-    """
-        Result in word is not good. Training loss is good, but when I predict, WER = 64%
-        Convolucional Recurrent Neural Network by Puigcerver et al.
-
-        Reference:
-            Joan Puigcerver.
-            Are multidimensional recurrent layers really necessary for handwritten text recognition?
-            In: Document Analysis and Recognition (ICDAR), 2017 14th
-            IAPR International Conference on, vol. 1, pp. 67–72. IEEE (2017)
-
-            Carlos Mocholí Calvo and Enrique Vidal Ruiz.
-            Development and experimentation of a deep learning system for convolutional and recurrent neural networks
-            Escola Tècnica Superior d’Enginyeria Informàtica, Universitat Politècnica de València, 2018
-        """
-
     input_data = Input(name="input", shape=input_size)
 
     cnn = Conv2D(filters=16, kernel_size=(3, 3), strides=(1, 1), padding="same")(input_data)
     cnn = BatchNormalization()(cnn)
     cnn = LeakyReLU(alpha=0.01)(cnn)
-    cnn = MaxPooling2D(pool_size=(2, 2), strides=(2, 2), padding="valid")(cnn)
+    cnn = MaxPooling2D(pool_size=(2, 2), strides=(1, 1))(cnn)
 
     cnn = Conv2D(filters=32, kernel_size=(3, 3), strides=(1, 1), padding="same")(cnn)
     cnn = BatchNormalization()(cnn)
     cnn = LeakyReLU(alpha=0.01)(cnn)
-    cnn = MaxPooling2D(pool_size=(2, 2), strides=(2, 2), padding="valid")(cnn)
+    cnn = MaxPooling2D(pool_size=(2, 2), strides=(1, 1))(cnn)
 
-    # cnn = Dropout(rate=0.2)(cnn)
-    # cnn = Conv2D(filters=48, kernel_size=(3, 3), strides=(1, 1), padding="same")(cnn)
-    # cnn = BatchNormalization()(cnn)
-    # cnn = LeakyReLU(alpha=0.01)(cnn)
-    # cnn = MaxPooling2D(pool_size=(2, 2), strides=(2, 2), padding="valid")(cnn)
+    cnn = Dropout(rate=0.2)(cnn)
+    cnn = Conv2D(filters=48, kernel_size=(3, 3), strides=(1, 1), padding="same")(cnn)
+    cnn = BatchNormalization()(cnn)
+    cnn = LeakyReLU(alpha=0.01)(cnn)
+    cnn = MaxPooling2D(pool_size=(2, 2), strides=(2, 2), padding="valid")(cnn)
 
     cnn = Dropout(rate=0.2)(cnn)
     cnn = Conv2D(filters=64, kernel_size=(3, 3), strides=(1, 1), padding="same")(cnn)

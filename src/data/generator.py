@@ -54,13 +54,13 @@ class DataGenerator():
             x_train = self.dataset['train']['dt'][index:until]
             y_train = self.dataset['train']['gt'][index:until]
 
-            x_train = pp.augmentation(x_train,
-                                      rotation_range=1.5,
-                                      scale_range=0.05,
-                                      height_shift_range=0.025,
-                                      width_shift_range=0.05,
-                                      erode_range=5,
-                                      dilate_range=3)
+            # x_train = pp.augmentation(x_train,
+            #                           rotation_range=1.5,
+            #                           scale_range=0.05,
+            #                           height_shift_range=0.025,
+            #                           width_shift_range=0.05,
+            #                           erode_range=5,
+            #                           dilate_range=3)
 
             x_train = pp.normalization(x_train)
 

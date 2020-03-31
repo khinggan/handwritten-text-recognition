@@ -32,21 +32,20 @@ class Dataset():
             arange = range(len(self.dataset[y]['gt']))
 
             for i in reversed(arange):
-                text = pp.text_standardize(self.dataset[y]['gt'][i])
+                # text = pp.text_standardize(self.dataset[y]['gt'][i])
+                #
+                # if not self.check_text(text):
+                #     self.dataset[y]['gt'].pop(i)
+                #     self.dataset[y]['dt'].pop(i)
+                #     continue
 
-                if not self.check_text(text):
-                    self.dataset[y]['gt'].pop(i)
-                    self.dataset[y]['dt'].pop(i)
-                    continue
-
-                # self.dataset[y]['gt'][i] = text.encode()
-                self.dataset[y]['gt'][i] = text
-
-                # self.dataset[y]['dt'][i] = pp.preproc(self.dataset[y]['dt'][i], input_size)
-            pool = Pool()
-            self.dataset[y]['dt'] = pool.map(partial(pp.preproc, input_size=input_size), self.dataset[y]['dt'])
-            pool.close()
-            pool.join()
+                # self.dataset[y]['gt'][i] = text
+                self.dataset[y]['gt'][i] = self.dataset[y]['gt'][i]
+                self.dataset[y]['dt'][i] = pp.preproc(self.dataset[y]['dt'][i], input_size)
+            # pool = Pool()
+            # self.dataset[y]['dt'] = pool.map(partial(pp.preproc, input_size=input_size), self.dataset[y]['dt'])
+            # pool.close()
+            # pool.join()
 
     def _bentham(self):
         """Bentham dataset reader"""

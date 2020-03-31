@@ -38,6 +38,7 @@ if __name__ == "__main__":
 
     parser.add_argument("--train", action="store_true", default=False)
     parser.add_argument("--test", action="store_true", default=False)
+    parser.add_argument("--decode", choices=["greedy", "prefix_beam"], default="greedy")
     parser.add_argument("--kaldi_assets", action="store_true", default=False)
 
     parser.add_argument("--epochs", type=int, default=1000)
@@ -216,31 +217,65 @@ if __name__ == "__main__":
 
         elif args.test:
             start_time = datetime.datetime.now()
+            predicts = []
+            ground_truths = []
+            confidences = []
+            if args.decode == "greedy":
+                predicts, confidences = model.predict(x=dtgen.next_test_batch(),
+                                                      steps=dtgen.steps['test'],
+                                                      ctc_decode=True,
+                                                      verbose=1)
+                predicts = [dtgen.tokenizer.decode(x[0]) for x in predicts]
+                ground_truths = dtgen.dataset['test']['gt']
+                with open(os.path.join(output_path, "predict.txt"), "w") as lg:
+                    for pd, gt, conf in zip(predicts, ground_truths, confidences):
+                        lg.write(f"TE_L {gt}\nTE_P {pd}\nCONF {conf}\n")
+            elif args.decode == "prefix_beam":
+                model.greedy = False
+                predicts, confidences = model.predict(x=dtgen.next_test_batch(),
+                                                      steps=dtgen.steps['test'],
+                                                      ctc_decode=True,
+                                                      verbose=1)
+                predicts = [dtgen.tokenizer.decode(x[0]) for x in predicts]
 
-            predicts, confidences = model.predict(x=dtgen.next_test_batch(),
-                                                  steps=dtgen.steps['test'],
-                                                  ctc_decode=True,
-                                                  verbose=1)
+                new_predicts = []
+                new_confidences = []
+                new_gt = []
+                for i, confidence in enumerate(confidences):
+                    if confidence[0] != 0 and (confidence[1] != -np.float('inf') or confidence[1] != -np.float('inf')):
+                        new_confidences.append((confidence[0] - confidence[1])/(confidence[0]+ confidence[1]))
+                        new_predicts.append(predicts[i])
+                        new_gt.append(dtgen.dataset['test']['gt'][i])
 
-            predicts = [dtgen.tokenizer.decode(x[0]) for x in predicts]
-            # 3 种 confidence 计算方法
-            new_predicts = []
-            new_confidences = []
-            new_gt = []
-            for i, confidence in enumerate(confidences):
-                if confidence[0] != 0 and (confidence[1] != -np.float('inf') or confidence[1] != -np.float('inf')):
-                    new_confidences.append(1 - confidence[1] / confidence[0])
-                    new_predicts.append(predicts[i])
-                    new_gt.append(dtgen.dataset['test']['gt'][i])
+                confidences = [(x[0] - x[1]) / (x[1] + x[0]) for x in confidences]
+                confidences = [x[0] for x in confidences]
 
-            # confidences = [(x[0] - x[1]) / (x[1] + x[0]) for x in confidences]
-            # confidences = [x[0] for x in confidences]
+                new_predicts = []
+                new_confidences = []
+                new_gt = []
+                for i, confidence in enumerate(confidences):
+                    if confidence[0] == 0:
+                        if confidence[1] == 0:
+                            new_confidences.append(0)
+                            new_predicts.append(predicts[i])
+                            new_gt.append(dtgen.dataset['test']['gt'][i])
+                        else:
+                            new_confidences.append(confidence[0])
+                            new_predicts.append(predicts[i])
+                            new_gt.append(dtgen.dataset['test']['gt'][i])
+                    elif confidence[0] != 0 and (confidence[1] != -np.float('inf') or confidence[0] != -np.float('inf')):
+                        new_confidences.append(1 - confidence[1] / confidence[0])
+                        new_predicts.append(predicts[i])
+                        new_gt.append(dtgen.dataset['test']['gt'][i])
+                    else:
+                        continue
+                    with open(os.path.join(output_path, "predict.txt"), "w") as lg:
+                        for pd, gt, conf in zip(predicts, dtgen.dataset['test']['gt'], new_confidences):
+                            lg.write(f"TE_L {gt}\nTE_P {pd}\nCONF {conf}\n")
+                predicts = new_predicts
+                ground_truths = new_gt
+                confidences = new_confidences
             total_time = datetime.datetime.now() - start_time
-
-            with open(os.path.join(output_path, "predict.txt"), "w") as lg:
-                # for pd, gt, conf in zip(predicts, dtgen.dataset['test']['gt'], confidences):
-                for pd, gt, conf in zip(predicts, dtgen.dataset['test']['gt'], new_confidences):
-                    lg.write(f"TE_L {gt}\nTE_P {pd}\nCONF {conf}\n")
 
             evaluate = evaluation.ocr_metrics(predicts=predicts,
                                               ground_truth=dtgen.dataset['test']['gt'],
@@ -257,10 +292,8 @@ if __name__ == "__main__":
                 f"Sequence Error Rate:  {evaluate[2]:.8f}"
             ])
             # draw ROC and calculate AUC
-            # y_test = [0 if pd == gt else 1 for pd, gt in zip(predicts, dtgen.dataset['test']['gt'])]
-            y_test = [0 if pd == gt else 1 for pd, gt in zip(new_predicts, new_gt)]
-            # evaluation.draw_roc(y_test, confidences)
-            evaluation.draw_roc(y_test, new_confidences)
+            y_test = [0 if pd == gt else 1 for pd, gt in zip(predicts, ground_truths)]
+            evaluation.draw_roc(y_test, confidences)
 
             with open(os.path.join(output_path, "evaluate.txt"), "w") as lg:
                 lg.write(e_corpus)

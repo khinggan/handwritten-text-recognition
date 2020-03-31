@@ -47,9 +47,6 @@ def ocr_metrics(predicts, ground_truth, norm_accentuation=False, norm_punctuatio
     return (cer_f, wer_f, ser_f)
 
 
-import numpy as np
-
-
 def draw_roc(y_test, result):
     fpr, tpr, threshold = metrics.roc_curve(y_test, result)
     roc_auc = metrics.auc(tpr, fpr)
