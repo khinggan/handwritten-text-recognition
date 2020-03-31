@@ -233,7 +233,7 @@ class HTRModel:
                                            greedy=self.greedy,
                                            beam_width=self.beam_width,
                                            top_paths=self.top_paths)
-                probabilities.extend([np.exp(x) for x in log])
+                probabilities.extend([1/(1 + np.exp(x)) for x in log])
                 decode = [[[int(p) for p in x if p != -1] for x in y] for y in decode]
                 predicts.extend(np.swapaxes(decode, 0, 1))
             else:

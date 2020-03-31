@@ -25,6 +25,7 @@ from data.generator import DataGenerator, Tokenizer
 from data.reader import Dataset
 from kaldiio import WriteHelper
 from network.model import HTRModel
+from network.confidence import lexicon_based_confidence
 
 
 if __name__ == "__main__":
@@ -39,6 +40,7 @@ if __name__ == "__main__":
     parser.add_argument("--train", action="store_true", default=False)
     parser.add_argument("--test", action="store_true", default=False)
     parser.add_argument("--decode", choices=["greedy", "prefix_beam"], default="greedy")
+    parser.add_argument("--confidence", choices=["lexicon_free", "lexicon_based"], default="lexicon_free")
     parser.add_argument("--kaldi_assets", action="store_true", default=False)
 
     parser.add_argument("--epochs", type=int, default=1000)
@@ -238,17 +240,16 @@ if __name__ == "__main__":
                                                       verbose=1)
                 predicts = [dtgen.tokenizer.decode(x[0]) for x in predicts]
 
-                new_predicts = []
-                new_confidences = []
-                new_gt = []
-                for i, confidence in enumerate(confidences):
-                    if confidence[0] != 0 and (confidence[1] != -np.float('inf') or confidence[1] != -np.float('inf')):
-                        new_confidences.append((confidence[0] - confidence[1])/(confidence[0]+ confidence[1]))
-                        new_predicts.append(predicts[i])
-                        new_gt.append(dtgen.dataset['test']['gt'][i])
-
-                confidences = [(x[0] - x[1]) / (x[1] + x[0]) for x in confidences]
-                confidences = [x[0] for x in confidences]
+                # new_predicts = []
+                # new_confidences = []
+                # new_gt = []
+                # for i, confidence in enumerate(confidences):
+                #     if confidence[0] != 0 and (confidence[1] != -np.float('inf') or confidence[1] != -np.float('inf')):
+                #         new_confidences.append((confidence[0] - confidence[1])/(confidence[0]+ confidence[1]))
+                #         new_predicts.append(predicts[i])
+                #         new_gt.append(dtgen.dataset['test']['gt'][i])
+                #
+                # confidences = [(x[0] - x[1]) / (x[1] + x[0]) for x in confidences]
 
                 new_predicts = []
                 new_confidences = []
@@ -269,16 +270,28 @@ if __name__ == "__main__":
                         new_gt.append(dtgen.dataset['test']['gt'][i])
                     else:
                         continue
-                    with open(os.path.join(output_path, "predict.txt"), "w") as lg:
-                        for pd, gt, conf in zip(predicts, dtgen.dataset['test']['gt'], new_confidences):
-                            lg.write(f"TE_L {gt}\nTE_P {pd}\nCONF {conf}\n")
+                with open(os.path.join(output_path, "predict.txt"), "w") as lg:
+                    for pd, gt, conf in zip(predicts, dtgen.dataset['test']['gt'], new_confidences):
+                        lg.write(f"TE_L {gt}\nTE_P {pd}\nCONF {conf}\n")
                 predicts = new_predicts
                 ground_truths = new_gt
                 confidences = new_confidences
             total_time = datetime.datetime.now() - start_time
 
+            if args.confidence == "lexicon_free" and args.decode == "greedy":
+                # normalize greedy
+                print("greedy, lexicon free")
+            elif args.confidence == "lexicon_free" and args.decode == "prefix_beam":
+                # continue
+                print("do not change")
+            elif args.confidence == "lexicon_based":
+                # use lexicon based confidence
+                predicts, confidences = lexicon_based_confidence(predicts)
+            else:
+                print("ERROR")
+            # ocr metrics
             evaluate = evaluation.ocr_metrics(predicts=predicts,
-                                              ground_truth=dtgen.dataset['test']['gt'],
+                                              ground_truth=ground_truths,
                                               norm_accentuation=False,
                                               norm_punctuation=False)
 
@@ -291,9 +304,29 @@ if __name__ == "__main__":
                 f"Word Error Rate:      {evaluate[1]:.8f}",
                 f"Sequence Error Rate:  {evaluate[2]:.8f}"
             ])
-            # draw ROC and calculate AUC
-            y_test = [0 if pd == gt else 1 for pd, gt in zip(predicts, ground_truths)]
-            evaluation.draw_roc(y_test, confidences)
+
+            results = []
+            for pd, gt, cf in zip(predicts, ground_truths, confidences):
+                results.append((pd, gt, cf))
+
+            results.sort(key=lambda idx: idx[2])
+            reject_rate = 0.9
+
+            pds = [result[0] for result in results]
+            pds = pds[int(reject_rate*len(results)):]
+            gts = [result[1] for result in results]
+            gts = gts[int(reject_rate * len(results)):]
+
+            evaluate_after_reject = evaluation.ocr_metrics(
+                predicts=pds,
+                ground_truth=gts,
+                norm_accentuation=False,
+                norm_punctuation=False
+            )
+
+            # # draw ROC and calculate AUC
+            # y_test = [1 if pd == gt else 0 for pd, gt in zip(predicts, ground_truths)]
+            # evaluation.draw_roc(y_test, confidences)
 
             with open(os.path.join(output_path, "evaluate.txt"), "w") as lg:
                 lg.write(e_corpus)
